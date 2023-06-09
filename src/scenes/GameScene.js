@@ -43,19 +43,12 @@ export default class GameScene extends Phaser.Scene {
     }
     
     create() {
-        this.screenSize = { x: this.sys.game.config.width, y: this.sys.game.config.height };
-        
         this.ship = this.createShip(200, 200);
 
         this.asteroidGroup = this.physics.add.group();
         this.missileGroup = this.physics.add.group();
 
-        for(let i = 0; i < this.asteroidsCount; i++) {
-            const randX = this.random(1000, true) % this.screenSize.x;
-            const randY = this.random(1000, true) % this.screenSize.y;
-            
-            this.asteroids.push(this.createAsteroid(randX, randY, 3));
-        }
+        this.spawnMultipleAsteroids(4);
         
         // creates basic control binding to Up, Down, Left, Right, Space, Shift
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -82,6 +75,9 @@ export default class GameScene extends Phaser.Scene {
         for (let a of this.asteroids){
             this.reappearOnOtherSide(a);
         }
+        if (this.asteroidGroup.getLength() === 0)
+            this.spawnMultipleAsteroids(4);
+
         this.reappearOnOtherSide(this.ship);
 
         // destroying missilies outside of Screen
@@ -114,6 +110,17 @@ export default class GameScene extends Phaser.Scene {
         this.physics.add.collider(this.ship, asteroid, this.onShipHit, null, this);
 
         return asteroid;
+    }
+
+    spawnMultipleAsteroids(asteroidsCount) {
+        this.screenSize = { x: this.sys.game.config.width, y: this.sys.game.config.height };
+
+        for(let i = 0; i < asteroidsCount; i++) {
+            const randX = this.random(1000, true) % this.screenSize.x;
+            const randY = this.random(1000, true) % this.screenSize.y;
+            
+            this.asteroids.push(this.createAsteroid(randX, randY, 3));
+        }
     }
 
     reappearOnOtherSide(object) {
