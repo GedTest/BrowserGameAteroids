@@ -1,8 +1,8 @@
 import Phaser from 'phaser'
 import Asteoid from './Asteroid';
+import ScoreLabel from '../ui/ScoreLabel';
 
 
-const ASTEROID = 'asteroid';
 const SHIP = 'ship';
 const MISSILE = 'missile';
 
@@ -11,12 +11,6 @@ export default class GameScene extends Phaser.Scene {
 	constructor() {
         super('game-scene')
 
-        
-        // Asteroid
-        this.directionAsteroid = undefined;
-        this.rankAsteroid = undefined;
-        this.speedAsteroid = 100;
-
         // Ship
         this.ship = undefined;
         this.speedShip = undefined;
@@ -24,15 +18,20 @@ export default class GameScene extends Phaser.Scene {
         this.isFiringShip = undefined;
         this.fireRate = undefined;
         this.timer = undefined;
+        this.isDestroyedShip = undefined;
 
         this.asteroids = [];
         this.asteroidsCount = 4;
 
         this.cursors = undefined;
+        this.scoreLabel = undefined;
     }
     
     preload() {
-        this.load.image(ASTEROID, 'assets/Asteroid1.png');  
+        this.load.image('ASTEROID_TYPE_A', 'assets/Asteroid1.png');
+        this.load.image('ASTEROID_TYPE_B', 'assets/Asteroid2.png');
+        this.load.image('ASTEROID_TYPE_C', 'assets/Asteroid3.png');
+
         this.load.spritesheet(SHIP,
             'assets/ShipSpritesheet.png',
             { frameWidth: 38, frameHeight: 29 }
@@ -55,10 +54,7 @@ export default class GameScene extends Phaser.Scene {
             const randX = this.random(1000, true) % this.screenSize.x;
             const randY = this.random(1000, true) % this.screenSize.y;
             
-            const directionX = this.random(2, true) == 0 ? 1 : -1;
-            const directionY = this.random(2, true) == 0 ? 1 : -1;
-            
-            this.asteroids.push(this.createAsteroid(randX, randY, { x: directionX, y: directionY }));
+            this.asteroids.push(this.createAsteroid(randX, randY, 3));
         }
         
         // creates basic control binding to Up, Down, Left, Right, Space, Shift
@@ -72,30 +68,49 @@ export default class GameScene extends Phaser.Scene {
             frameRate: 1,
             repeat: -1
         });
+
+        this.scoreLabel = this.createScoreLabel(16, 16, 0);
         
         //add a listener for when the screen is clicked
         //this.input.on('pointerdown', this.showDelta.bind(this));
     }
     
     update(time, delta) {
-        this.handleInput(delta);
+        if (!this.isDestroyedShip)
+            this.handleInput(delta);
 
         for (let a of this.asteroids){
             this.reappearOnOtherSide(a);
         }
         this.reappearOnOtherSide(this.ship);
+
+        // destroying missilies outside of Screen
+        this.missileGroup.getChildren().forEach((c) => {
+            if ( c.x > this.screenSize.x || c.x < 0 ||
+                c.y > this.screenSize.y || c.y < 0 ) {
+                this.missileGroup.remove(c, true, true);
+            }
+        });
     }
     
-    createAsteroid(x, y, direction) {
-        const asteroid = this.physics.add.image(x, y, ASTEROID);
+    createAsteroid(x, y, rank) {
+        let a = this.random(3, true);
+        const letter = a === 0 ? 'A' : ( a === 1 ? 'B' : 'C') ;
+        const asteroid = this.physics.add.image(x, y, 'ASTEROID_TYPE_' + letter);
         this.asteroidGroup.add(asteroid);
+        
+        asteroid.setScale(rank/3);
 
-        this.directionAsteroid = direction;
-        this.rankAsteroid = 1;
-        asteroid.setVelocity(this.speedAsteroid * this.directionAsteroid.x * this.rankAsteroid, this.speedAsteroid * this.directionAsteroid.y * this.rankAsteroid);
+        const directionX = this.random(2, true) == 0 ? 1 : -1;
+        const directionY = this.random(2, true) == 0 ? 1 : -1;
+
+        const speed = 80 / (rank) - rank*5;
+
+        asteroid.setVelocity(speed * directionX * rank, speed * directionY * rank);
         asteroid.setCollideWorldBounds(false);
         asteroid.body.allowGravity = false;
-
+        
+        asteroid.setData('rank', rank);
         this.physics.add.collider(this.ship, asteroid, this.onShipHit, null, this);
 
         return asteroid;
@@ -124,6 +139,7 @@ export default class GameScene extends Phaser.Scene {
         this.fireRate = 200;
 
         this.createAnimationShip();
+        this.isDestroyedShip = false;
 
         return ship;
     }
@@ -142,11 +158,15 @@ export default class GameScene extends Phaser.Scene {
     }
 
     onShipHit(ship) {
-        //ship.setVisible(false);
-        //ship.disableBody(true, true);
+        ship.setVisible(false);
+        ship.disableBody(true, true);
+        this.isDestroyedShip = true;
 
-        //this.physics.pause();
-        //this.gameOver = true;
+        this.restartTimer = this.time.addEvent({
+            delay: 3000,
+            callback: this.restart,
+            callbackScope: this
+        });
     }
 
     createMissile(x, y) {
@@ -157,7 +177,6 @@ export default class GameScene extends Phaser.Scene {
         missile.setCollideWorldBounds(false);
         missile.body.allowGravity = false;
 
-
         missile.anims.play('fire');
 
         this.physics.velocityFromRotation(this.ship.rotation, 400, missile.body.velocity);
@@ -166,13 +185,25 @@ export default class GameScene extends Phaser.Scene {
         return missile;
     }
 
-    onAsteroidHit(asteroid) {
+    onAsteroidHit(asteroid, missile) {
+        this.missileGroup.remove(missile, true, true);
+        
+        if (asteroid.getData('rank')-1 > 0) {
+            for(let i = 0; i < 2; i++) {
+                let offset = i*30;
+                this.asteroids.push(this.createAsteroid(
+                    asteroid.x+offset, asteroid.y+offset, asteroid.getData('rank')-1
+                ));
+            }
+        }
+        
+        const score = 60 / asteroid.getData('rank') + ((3 - asteroid.getData('rank'))*20);
+        this.scoreLabel.add(score);
+
         this.asteroidGroup.remove(asteroid, true, true);
     }
 
-    handleInput(delta) {  
-        // this.input.on('', 0);
-
+    handleInput(delta) {
         // ship thrust
         if (this.cursors.up.isDown) {
             this.ship.anims.play('move');
@@ -193,7 +224,6 @@ export default class GameScene extends Phaser.Scene {
         this.ship.body.velocity.scale(0.95);
         this.ship.body.angularVelocity *= 0.95;
 
-
         // ship fire
         if (this.cursors.space.isDown && !this.isFiringShip) {
             this.isFiringShip = true;
@@ -206,7 +236,18 @@ export default class GameScene extends Phaser.Scene {
                 callbackScope: this
             });
         }
+    }
 
+    createScoreLabel(x, y, score) {
+        const style = { fontSize: '32px', fill: '#FFF' };
+        const label = new ScoreLabel(this, x, y, score, style);
+        
+        this.add.existing(label);
+        return label;
+    }
+
+    restart() {
+        this.scene.restart();
     }
     
     resetFiringState() {
