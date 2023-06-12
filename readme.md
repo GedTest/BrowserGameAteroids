@@ -3,16 +3,6 @@
 # Phaser 3 + Parcel Template
 > For people who want to spend time making games instead of configuring build tools.
 
-## Prerequisites
-
-You'll need [Node.js](https://nodejs.org/en/), [npm](https://www.npmjs.com/), and [Parcel](https://parceljs.org/) installed.
-
-
-Install Parcel:
-
-```bash
-npm install -g parcel-bundler
-```
 
 ## Getting Started
 
